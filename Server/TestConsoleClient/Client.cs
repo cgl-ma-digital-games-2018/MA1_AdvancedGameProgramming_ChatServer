@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace TestConsoleClient
 {
@@ -11,6 +12,8 @@ namespace TestConsoleClient
         public string IpAddress { get; }
         public int Port { get; }
         public bool IsConnected { get; private set; } = false;
+
+        private TcpClient _tcpClient = null;
 
         #region Constructor
         public Client(string ipAddress, int port)
@@ -22,34 +25,58 @@ namespace TestConsoleClient
 
         public void Connect()
         {
-            using (var tcpClient = new TcpClient(IpAddress, Port))
-            using (var networkStream = tcpClient.GetStream())
-            using (var sReader = new StreamReader(networkStream))
-            using (var sWriter = new StreamWriter(networkStream))
+            try
+            {
+                _tcpClient = new TcpClient(IpAddress, Port);
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception);
+            }
+
+            // Creates new thread for user input.
+            //var userInputThread = new Thread(HandleInput);
+            //userInputThread.Start();
+
+            using (var sReader = new StreamReader(_tcpClient.GetStream()))
+            using (var sWriter = new StreamWriter(_tcpClient.GetStream()))
             {
                 Console.Clear();
-                sWriter.AutoFlush = true;
+                //sWriter.AutoFlush = true;
                 IsConnected = true;
                 Console.WriteLine($"Connected to server at IP Address: {IpAddress}, Port: {Port} \n");
 
-                // Handles communication.
-                var outgoingMessage = string.Empty;
-                while (!outgoingMessage.Equals("exit"))
+                // Handles incoming communication.
+                while (true)
                 {
                     var incomingMessage = sReader.ReadLine();
                     Console.WriteLine(incomingMessage);
 
-                    // Loops for non-empty user input.
-                    while (outgoingMessage == string.Empty)
+                    Console.Write(">> ");
+                    var outgoingMessage = Console.ReadLine() ?? string.Empty;
+
+                    if (outgoingMessage != string.Empty)
                     {
-                        Console.Write(">> ");
-                        outgoingMessage = Console.ReadLine() ?? string.Empty;
+                        sWriter.WriteLine(outgoingMessage);
                     }
+                }
+            }
+        }
+
+        private void HandleInput()
+        {
+            using (var sWriter = new StreamWriter(_tcpClient.GetStream()))
+            {
+                var outgoingMessage = string.Empty;
+
+                // Loops for non-empty user input.
+                while (!outgoingMessage.StartsWith("exit"))
+                {
+                    Console.WriteLine("writer stream id: " + _tcpClient.GetStream().GetHashCode());
+                    Console.Write(">> ");
+                    outgoingMessage = Console.ReadLine() ?? string.Empty;
 
                     sWriter.WriteLine(outgoingMessage);
-
-                    // Resets user input.
-                    outgoingMessage = string.Empty;
                 }
             }
         }
